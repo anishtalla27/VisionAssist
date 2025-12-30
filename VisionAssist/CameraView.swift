@@ -11,34 +11,55 @@ import AVFoundation
 struct CameraView: UIViewRepresentable {
     @ObservedObject var cameraManager = CameraManager()
     
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+    
     func makeUIView(context: Context) -> UIView {
-        let view = UIView(frame: .zero)
-
-        cameraManager.previewLayer.frame = view.bounds
+        let view = CameraContainerView()
+        context.coordinator.containerView = view
+        context.coordinator.overlay = view.overlay
+        context.coordinator.cameraManager = cameraManager
+        view.previewLayer = cameraManager.previewLayer
+        
         cameraManager.previewLayer.videoGravity = .resizeAspectFill
+        cameraManager.previewLayer.frame = view.bounds
         view.layer.addSublayer(cameraManager.previewLayer)
-
-        let overlay = CameraPreviewView()
-        overlay.frame = view.bounds
-        overlay.isUserInteractionEnabled = false
-        overlay.backgroundColor = .clear
-        view.addSubview(overlay)
+        view.overlay.backgroundColor = .clear
+        view.overlay.isUserInteractionEnabled = false
+        view.addSubview(view.overlay)
 
         cameraManager.onDetections = { detections in
             DispatchQueue.main.async {
-                overlay.updateDetections(detections)
+                view.overlay.updateDetections(detections)
             }
         }
+        
         return view
     }
 
     func updateUIView(_ uiView: UIView, context: Context) {
-        cameraManager.previewLayer.frame = uiView.bounds
-        for subview in uiView.subviews {
-            if let overlay = subview as? CameraPreviewView {
-                overlay.frame = uiView.bounds
-            }
-        }
+        guard let containerView = uiView as? CameraContainerView else { return }
+        cameraManager.previewLayer.frame = containerView.bounds
+        containerView.overlay.frame = containerView.bounds
+    }
+    
+    class Coordinator {
+        weak var containerView: CameraContainerView?
+        weak var overlay: CameraPreviewView?
+        weak var cameraManager: CameraManager?
+    }
+}
+
+class CameraContainerView: UIView {
+    let overlay = CameraPreviewView()
+    weak var previewLayer: AVCaptureVideoPreviewLayer?
+    
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        // Update preview layer frame when view bounds change
+        previewLayer?.frame = bounds
+        overlay.frame = bounds
     }
 }
 

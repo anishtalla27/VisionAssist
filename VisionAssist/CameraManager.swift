@@ -7,6 +7,7 @@ class CameraManager: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
 
     let session = AVCaptureSession()
     private let detector = ObjectDetector()
+    private var lastProcessTime = Date()
 
     // Callback that sends detections back to UI
     var onDetections: (([DetectedObject]) -> Void)?
@@ -44,12 +45,17 @@ class CameraManager: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
 
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
 
-        // Run detection
-        let detections = detector.detect(pixelBuffer: pixelBuffer)
+        // Only process 1 frame every 0.2 seconds to avoid overload
+        let now = Date()
+        guard now.timeIntervalSince(lastProcessTime) > 0.2 else { return }
+        lastProcessTime = now
 
-        // Send results to UI
-        DispatchQueue.main.async {
-            self.onDetections?(detections)
+        DispatchQueue.global(qos: .userInitiated).async {
+            let detections = self.detector.detect(pixelBuffer: pixelBuffer)
+
+            DispatchQueue.main.async {
+                self.onDetections?(detections)
+            }
         }
     }
 }

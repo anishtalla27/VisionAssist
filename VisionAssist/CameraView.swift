@@ -47,7 +47,10 @@ struct CameraView: UIViewRepresentable {
 // UIView subclass to show preview + overlays
 class CameraPreviewView: UIView {
     private var previewLayer: AVCaptureVideoPreviewLayer
-    private var boxLayers: [CAShapeLayer] = []
+    private var boxLayers: [CALayer] = []
+    private var lastDetections: [DetectedObject] = []
+    private let persistenceFrames = 6 // show boxes for ~6 cycles if object disappears
+    private var persistenceCounter = 0
 
     override class var layerClass: AnyClass { AVCaptureVideoPreviewLayer.self }
 
@@ -65,17 +68,33 @@ class CameraPreviewView: UIView {
 
     required init?(coder: NSCoder) { fatalError() }
 
-    // Draw detection rectangles
     func updateDetections(_ detections: [DetectedObject]) {
+        if detections.isEmpty {
+            if persistenceCounter > 0 {
+                persistenceCounter -= 1
+                drawBoxes(lastDetections)
+            } else {
+                clearBoxes()
+            }
+            return
+        }
+
+        lastDetections = detections
+        persistenceCounter = persistenceFrames
+        drawBoxes(detections)
+    }
+    
+    private func clearBoxes() {
         boxLayers.forEach { $0.removeFromSuperlayer() }
         boxLayers.removeAll()
-
-        guard !detections.isEmpty else { return }
+    }
+    
+    private func drawBoxes(_ detections: [DetectedObject]) {
+        clearBoxes()
 
         for det in detections {
-            let n = det.rect  // normalized YOLO rect (0-1)
+            let n = det.rect
 
-            // convert normalized -> screen coords
             let viewRect = CGRect(
                 x: n.minX * bounds.width,
                 y: (1 - n.maxY) * bounds.height,
@@ -83,14 +102,24 @@ class CameraPreviewView: UIView {
                 height: n.height * bounds.height
             )
 
-            let shape = CAShapeLayer()
-            shape.path = UIBezierPath(rect: viewRect).cgPath
-            shape.strokeColor = UIColor.systemYellow.cgColor
-            shape.lineWidth = 2
-            shape.fillColor = UIColor.clear.cgColor
+            let box = CAShapeLayer()
+            box.path = UIBezierPath(rect: viewRect).cgPath
+            box.strokeColor = UIColor.yellow.cgColor
+            box.lineWidth = 2
+            box.fillColor = UIColor.clear.cgColor
+            layer.addSublayer(box)
+            boxLayers.append(box)
 
-            layer.addSublayer(shape)
-            boxLayers.append(shape)
+            // label text
+            let textLayer = CATextLayer()
+            textLayer.string = det.label + " " + String(format: "%.2f", det.confidence)
+            textLayer.foregroundColor = UIColor.yellow.cgColor
+            textLayer.fontSize = 14
+            textLayer.frame = CGRect(x: viewRect.minX, y: viewRect.minY - 18, width: 120, height: 18)
+            textLayer.contentsScale = UIScreen.main.scale  // sharp text
+
+            layer.addSublayer(textLayer)
+            boxLayers.append(textLayer)
         }
     }
     

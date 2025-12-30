@@ -119,11 +119,52 @@ class ObjectDetector {
             return []
         }
         
-        if !detectedObjects.isEmpty {
-            print("✅ Detections this frame: \(detectedObjects.count)")
+        // Apply NMS to remove duplicate detections
+        let filteredDetections = nonMaximumSuppression(detections: detectedObjects, iouThreshold: 0.45)
+        
+        if !filteredDetections.isEmpty {
+            print("✅ Detections this frame: \(filteredDetections.count)")
         }
-        return detectedObjects
+        return filteredDetections
     }
+    
+    // MARK: - Non-Maximum Suppression
+    
+    private func nonMaximumSuppression(detections: [DetectedObject], iouThreshold: Float = 0.45) -> [DetectedObject] {
+        // Sort by confidence descending
+        let sorted = detections.sorted { $0.confidence > $1.confidence }
+        var keep: [DetectedObject] = []
+        var suppressed = Set<Int>()
+        
+        for i in 0..<sorted.count {
+            if suppressed.contains(i) { continue }
+            keep.append(sorted[i])
+            
+            // Suppress overlapping boxes
+            for j in (i+1)..<sorted.count {
+                if suppressed.contains(j) { continue }
+                
+                let iou = calculateIOU(rect1: sorted[i].rect, rect2: sorted[j].rect)
+                if iou > iouThreshold {
+                    suppressed.insert(j)
+                }
+            }
+        }
+        
+        return keep
+    }
+    
+    private func calculateIOU(rect1: CGRect, rect2: CGRect) -> Float {
+        let intersection = rect1.intersection(rect2)
+        if intersection.isNull { return 0 }
+        
+        let intersectionArea = intersection.width * intersection.height
+        let unionArea = rect1.width * rect1.height + rect2.width * rect2.height - intersectionArea
+        
+        return Float(intersectionArea / unionArea)
+    }
+    
+    // MARK: - YOLO Output Parsing
     
     private func parseYOLOOutputs(observations: [VNObservation]) -> [DetectedObject] {
         var detectedObjects: [DetectedObject] = []
@@ -163,7 +204,7 @@ class ObjectDetector {
         let coordsCount = 4
         let numClasses = channels - coordsCount
 
-        let confThreshold: Float = 0.25
+        let confThreshold: Float = 0.45  // Higher threshold = fewer false positives
 
         for det in 0..<numDetections {
             // Read bbox center x, center y, width, height from channel 0..3
@@ -190,6 +231,18 @@ class ObjectDetector {
             }
 
             // CRITICAL FIX: Normalize coordinates from pixel space to [0, 1]
+            let normalizedWidthCheck = boxWidth / Double(modelInputSize)
+            let normalizedHeightCheck = boxHeight / Double(modelInputSize)
+            
+            // Filter out boxes that are too small (likely noise)
+            if normalizedWidthCheck < 0.02 || normalizedHeightCheck < 0.02 {
+                continue
+            }
+            
+            // Filter out boxes that are unreasonably large (likely errors)
+            if normalizedWidthCheck > 0.95 || normalizedHeightCheck > 0.95 {
+                continue
+            }
             let normalizedX = (xCenter - boxWidth / 2) / Double(modelInputSize)
             let normalizedY = (yCenter - boxHeight / 2) / Double(modelInputSize)
             let normalizedWidth = boxWidth / Double(modelInputSize)

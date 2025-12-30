@@ -84,17 +84,23 @@ class CameraPreviewView: UIView {
         ctx.clear(rect)
 
         for box in detections {
-            // Use AVCaptureVideoPreviewLayer to convert Vision coordinates to layer coordinates
-            // This properly handles the aspect ratio difference between model input (640x640)
-            // and the camera preview which uses resizeAspectFill
+            // Convert Vision coordinates to layer coordinates
             let convertedRect = previewLayer.layerRectConverted(fromMetadataOutputRect: box.rect)
             
-            // Draw bounding box with thick yellow line
+            // CRITICAL FIX: Clamp bounding box to screen bounds
+            let clampedRect = convertedRect.intersection(bounds)
+            
+            // Skip if box is completely off-screen or too small
+            guard !clampedRect.isNull, clampedRect.width > 10, clampedRect.height > 10 else {
+                continue
+            }
+            
+            // Draw bounding box
             ctx.setStrokeColor(UIColor.yellow.cgColor)
             ctx.setLineWidth(4)
-            ctx.stroke(convertedRect)
+            ctx.stroke(clampedRect)
 
-            // Draw label
+            // Draw label with smart positioning
             let text = "\(box.label) \(Int(box.confidence * 100))%"
             let attrs: [NSAttributedString.Key: Any] = [
                 .font: UIFont.boldSystemFont(ofSize: 16),
@@ -102,7 +108,26 @@ class CameraPreviewView: UIView {
             ]
             
             let textSize = text.size(withAttributes: attrs)
-            let labelOrigin = CGPoint(x: convertedRect.minX, y: max(0, convertedRect.minY - textSize.height - 4))
+            
+            // CRITICAL FIX: Smart label positioning
+            // Try above box first, if not enough space, put inside box at top
+            var labelOrigin: CGPoint
+            
+            if clampedRect.minY > textSize.height + 8 {
+                // Enough space above box
+                labelOrigin = CGPoint(x: clampedRect.minX, y: clampedRect.minY - textSize.height - 4)
+            } else {
+                // Not enough space above, put inside box at top
+                labelOrigin = CGPoint(x: clampedRect.minX + 4, y: clampedRect.minY + 4)
+            }
+            
+            // Ensure label doesn't go off right edge
+            if labelOrigin.x + textSize.width + 8 > bounds.width {
+                labelOrigin.x = bounds.width - textSize.width - 12
+            }
+            
+            // Ensure label doesn't go off left edge
+            labelOrigin.x = max(4, labelOrigin.x)
             
             // Draw semi-transparent background for text
             let backgroundRect = CGRect(

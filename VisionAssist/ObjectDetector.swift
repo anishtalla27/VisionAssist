@@ -25,6 +25,12 @@ class ObjectDetector {
             do {
                 let compiled = try MLModel.compileModel(at: url)
                 let model = try MLModel(contentsOf: compiled)
+                
+                print("Model loaded. Output descriptions:")
+                for (name, output) in model.modelDescription.outputDescriptionsByName {
+                    print("•", name, output)
+                }
+                
                 return try VNCoreMLModel(for: model)
             } catch {
                 print("Model load failed:", error.localizedDescription)
@@ -55,6 +61,9 @@ class ObjectDetector {
                 semaphore.signal()
                 return
             }
+            
+            print("🔎 Inference result:", type(of: request.results))
+            print("Result count:", request.results?.count ?? 0)
             
             // Safely unwrap request.results
             guard let results = request.results else {

@@ -12,7 +12,7 @@ struct CameraView: UIViewRepresentable {
     @ObservedObject var cameraManager = CameraManager()
     
     func makeUIView(context: Context) -> UIView {
-        let view = UIView(frame: UIScreen.main.bounds)
+        let view = UIView(frame: .zero)
 
         cameraManager.previewLayer.frame = view.bounds
         cameraManager.previewLayer.videoGravity = .resizeAspectFill
@@ -33,8 +33,11 @@ struct CameraView: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: UIView, context: Context) {
-        if let previewLayer = cameraManager.previewLayer.superlayer {
-            cameraManager.previewLayer.frame = uiView.bounds
+        cameraManager.previewLayer.frame = uiView.bounds
+        for subview in uiView.subviews {
+            if let overlay = subview as? CameraPreviewView {
+                overlay.frame = uiView.bounds
+            }
         }
     }
 }

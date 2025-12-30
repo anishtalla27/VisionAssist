@@ -2,6 +2,7 @@ import Foundation
 import AVFoundation
 import Vision
 import UIKit
+import Combine
 
 class CameraManager: NSObject, ObservableObject, AVCaptureVideoDataOutputSampleBufferDelegate {
 

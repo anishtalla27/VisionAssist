@@ -1,87 +1,55 @@
-//
-//  CameraManager.swift
-//  VisionAssist
-//
-//  Created by Anish Talla on 12/29/25.
-//
-
+import Foundation
 import AVFoundation
+import Vision
 import UIKit
 
-class CameraManager {
-    private let session = AVCaptureSession()
-    private var videoDeviceInput: AVCaptureDeviceInput?
-    private let sessionQueue = DispatchQueue(label: "camera.session.queue")
-    
-    var previewLayer: AVCaptureVideoPreviewLayer?
-    
-    init() {
-        setupPreviewLayer()
+class CameraManager: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
+
+    let session = AVCaptureSession()
+    private let detector = ObjectDetector()
+
+    // Callback that sends detections back to UI
+    var onDetections: (([DetectedObject]) -> Void)?
+
+    override init() {
+        super.init()
+        configureSession()
     }
-    
-    private func setupPreviewLayer() {
-        previewLayer = AVCaptureVideoPreviewLayer(session: session)
-        previewLayer?.videoGravity = .resizeAspectFill
-    }
-    
-    func checkPermission(completion: @escaping (Bool) -> Void) {
-        switch AVCaptureDevice.authorizationStatus(for: .video) {
-        case .authorized:
-            completion(true)
-        case .notDetermined:
-            AVCaptureDevice.requestAccess(for: .video) { granted in
-                DispatchQueue.main.async {
-                    completion(granted)
-                }
-            }
-        case .denied, .restricted:
-            completion(false)
-        @unknown default:
-            completion(false)
+
+    private func configureSession() {
+        session.beginConfiguration()
+        session.sessionPreset = .high
+
+        guard let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back),
+              let input = try? AVCaptureDeviceInput(device: device) else {
+            print("Camera input unavailable")
+            session.commitConfiguration()
+            return
         }
+
+        if session.canAddInput(input) { session.addInput(input) }
+
+        let output = AVCaptureVideoDataOutput()
+        output.setSampleBufferDelegate(self, queue: DispatchQueue(label: "camera.queue"))
+        if session.canAddOutput(output) { session.addOutput(output) }
+
+        session.commitConfiguration()
+        session.startRunning()
     }
-    
-    func setupSession() {
-        sessionQueue.async { [weak self] in
-            guard let self = self else { return }
-            
-            self.session.beginConfiguration()
-            self.session.sessionPreset = .high
-            
-            // Configure video input
-            guard let videoDevice = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back),
-                  let videoDeviceInput = try? AVCaptureDeviceInput(device: videoDevice),
-                  self.session.canAddInput(videoDeviceInput) else {
-                self.session.commitConfiguration()
-                return
-            }
-            
-            self.session.addInput(videoDeviceInput)
-            self.videoDeviceInput = videoDeviceInput
-            
-            self.session.commitConfiguration()
+
+    // Called every frame from camera
+    func captureOutput(_ output: AVCaptureOutput,
+                       didOutput sampleBuffer: CMSampleBuffer,
+                       from connection: AVCaptureConnection) {
+
+        guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
+
+        // Run detection
+        let detections = detector.detect(pixelBuffer: pixelBuffer)
+
+        // Send results to UI
+        DispatchQueue.main.async {
+            self.onDetections?(detections)
         }
-    }
-    
-    func startSession() {
-        sessionQueue.async { [weak self] in
-            guard let self = self else { return }
-            if !self.session.isRunning {
-                self.session.startRunning()
-            }
-        }
-    }
-    
-    func stopSession() {
-        sessionQueue.async { [weak self] in
-            guard let self = self else { return }
-            if self.session.isRunning {
-                self.session.stopRunning()
-            }
-        }
-    }
-    
-    deinit {
-        stopSession()
     }
 }

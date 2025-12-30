@@ -66,26 +66,41 @@ class CameraPreviewView: UIView {
     required init?(coder: NSCoder) { fatalError() }
 
     // Draw detection rectangles
-    @objc func updateBoxes(_ note: Notification) {
-        guard let objects = note.object as? [DetectedObject], let layer = self.layer as? AVCaptureVideoPreviewLayer else { return }
-
+    func updateDetections(_ detections: [DetectedObject]) {
         // Remove old boxes
         boxLayers.forEach { $0.removeFromSuperlayer() }
         boxLayers.removeAll()
 
-        for obj in objects {
-            let convertedRect = layer.layerRectConverted(fromMetadataOutputRect: obj.rect)
+        guard !detections.isEmpty else { return }
+
+        for detection in detections {
+            let n = detection.rect  // normalized rect [0,1]
+
+            // Convert to view coordinates
+            let viewRect = CGRect(
+                x: n.origin.x * bounds.width,
+                // flip vertically because normalized y is from top in model space
+                y: (1 - n.origin.y - n.height) * bounds.height,
+                width: n.width * bounds.width,
+                height: n.height * bounds.height
+            )
 
             let shape = CAShapeLayer()
-            shape.frame = convertedRect
-            shape.path = UIBezierPath(rect: shape.bounds).cgPath
-            shape.strokeColor = UIColor.yellow.cgColor
-            shape.lineWidth = 2
-            shape.fillColor = UIColor.clear.cgColor
+            shape.frame = viewRect
+            shape.borderColor = UIColor.systemYellow.cgColor
+            shape.borderWidth = 2
+            shape.cornerRadius = 4
+            shape.masksToBounds = true
 
             layer.addSublayer(shape)
             boxLayers.append(shape)
         }
+    }
+    
+    @objc func updateBoxes(_ note: Notification) {
+        guard let detections = note.object as? [DetectedObject] else { return }
+        print("UI received detections:", detections.count)
+        updateDetections(detections)
     }
 }
 

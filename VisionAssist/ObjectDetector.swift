@@ -81,16 +81,8 @@ class ObjectDetector {
                 for observation in recognizedObservations {
                     guard let topLabelObservation = observation.labels.first else { continue }
                     
-                    // Convert bounding box from normalized coordinates (0-1) to pixel coordinates
-                    let width = CGFloat(CVPixelBufferGetWidth(pixelBuffer))
-                    let height = CGFloat(CVPixelBufferGetHeight(pixelBuffer))
-                    
-                    let rect = CGRect(
-                        x: observation.boundingBox.origin.x * width,
-                        y: (1 - observation.boundingBox.origin.y - observation.boundingBox.height) * height,
-                        width: observation.boundingBox.width * width,
-                        height: observation.boundingBox.height * height
-                    )
+                    // Use normalized bounding box directly (VNRecognizedObjectObservation provides normalized rects)
+                    let rect = observation.boundingBox
                     
                     let detectedObject = DetectedObject(
                         label: topLabelObservation.identifier,
@@ -101,7 +93,7 @@ class ObjectDetector {
                 }
             } else {
                 // Handle raw outputs (YOLO models typically output MLMultiArray)
-                detectedObjects = self.parseYOLOOutputs(observations: results, pixelBuffer: pixelBuffer)
+                detectedObjects = self.parseYOLOOutputs(observations: results)
             }
             
             semaphore.signal()
@@ -121,7 +113,7 @@ class ObjectDetector {
         return detectedObjects
     }
     
-    private func parseYOLOOutputs(observations: [VNObservation], pixelBuffer: CVPixelBuffer) -> [DetectedObject] {
+    private func parseYOLOOutputs(observations: [VNObservation]) -> [DetectedObject] {
         var detectedObjects: [DetectedObject] = []
 
         // COCO class names for YOLO11n
@@ -137,9 +129,6 @@ class ObjectDetector {
             "keyboard", "cell phone", "microwave", "oven", "toaster", "sink", "refrigerator", "book",
             "clock", "vase", "scissors", "teddy bear", "hair drier", "toothbrush"
         ]
-
-        let width = CGFloat(CVPixelBufferGetWidth(pixelBuffer))
-        let height = CGFloat(CVPixelBufferGetHeight(pixelBuffer))
 
         guard let featureObs = observations.first as? VNCoreMLFeatureValueObservation,
               let multiArray = featureObs.featureValue.multiArrayValue else {
@@ -189,12 +178,12 @@ class ObjectDetector {
                 continue
             }
 
-            // Convert normalized center format to pixel CGRect
+            // We keep everything in normalized [0, 1] space here
             let rect = CGRect(
-                x: CGFloat(xCenter - boxWidth / 2) * width,
-                y: CGFloat(1 - yCenter - boxHeight / 2) * height,
-                width: CGFloat(boxWidth) * width,
-                height: CGFloat(boxHeight) * height
+                x: CGFloat(xCenter - boxWidth / 2),
+                y: CGFloat(yCenter - boxHeight / 2),
+                width: CGFloat(boxWidth),
+                height: CGFloat(boxHeight)
             )
 
             let label = bestClassIndex < classNames.count ? classNames[bestClassIndex] : "class_\(bestClassIndex)"

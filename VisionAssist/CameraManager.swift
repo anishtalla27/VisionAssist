@@ -55,6 +55,7 @@ class CameraManager: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
 
             DispatchQueue.main.async {
                 self.onDetections?(detections)
+                NotificationCenter.default.post(name: .updateDetections, object: detections)
             }
         }
     }

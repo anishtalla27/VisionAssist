@@ -38,8 +38,8 @@ class ObjectDetector {
             }
         }
 
-        guard let url = bundle.url(forResource: "yolo11n", withExtension: "mlmodelc") else {
-            print("❌ yolo11n.mlmodelc not found in bundle")
+        guard let url = bundle.url(forResource: "yolo11m", withExtension: "mlmodelc") else {
+            print("❌ yolo11m.mlmodelc not found in bundle")
             return nil
         }
 

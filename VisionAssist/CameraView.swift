@@ -60,19 +60,46 @@ struct CameraView: UIViewRepresentable {
 class CameraContainerView: UIView {
     let overlay = CameraPreviewView()
     weak var previewLayer: AVCaptureVideoPreviewLayer?
+    private var displayLink: CADisplayLink?
+    
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        setupDisplayLink()
+    }
+    
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        setupDisplayLink()
+    }
+    
+    private func setupDisplayLink() {
+        displayLink = CADisplayLink(target: self, selector: #selector(refresh))
+        displayLink?.add(to: .main, forMode: .common)
+    }
+    
+    @objc private func refresh() {
+        overlay.setNeedsDisplay()
+    }
     
     override func layoutSubviews() {
         super.layoutSubviews()
-        // Update frames when view bounds change
         previewLayer?.frame = bounds
         overlay.frame = bounds
     }
+    
+    deinit {
+        displayLink?.invalidate()
+    }
 }
 
-// UIView subclass for overlay drawing
+// UIView subclass for overlay drawing with temporal smoothing
 class CameraPreviewView: UIView {
-    private var detections: [DetectedObject] = []
-    weak var previewLayer: AVCaptureVideoPreviewLayer?  // Reference for coordinate conversion
+    private var trackedDetections: [TrackedDetection] = []
+    weak var previewLayer: AVCaptureVideoPreviewLayer?
+    
+    // Stabilization parameters
+    private let minConfirmationFrames = 2      // Must be detected in N frames to show
+    private let maxDetectionAge: TimeInterval = 0.5  // Keep for 0.5s after last seen
     
     override func draw(_ rect: CGRect) {
         super.draw(rect)
@@ -80,63 +107,64 @@ class CameraPreviewView: UIView {
         guard let ctx = UIGraphicsGetCurrentContext(),
               let previewLayer = previewLayer else { return }
         
-        // Clear any previous drawings
         ctx.clear(rect)
-
-        for box in detections {
-            // Convert Vision coordinates to layer coordinates
-            let convertedRect = previewLayer.layerRectConverted(fromMetadataOutputRect: box.rect)
+        
+        // Remove stale detections
+        trackedDetections.removeAll { $0.isStale(maxAge: maxDetectionAge) }
+        
+        // Draw only confirmed detections
+        for tracked in trackedDetections where tracked.isConfirmed(minFrames: minConfirmationFrames) {
+            // Use smoothed rect for stable display
+            let convertedRect = previewLayer.layerRectConverted(fromMetadataOutputRect: tracked.smoothedRect)
             
-            // CRITICAL FIX: Clamp bounding box to screen bounds
+            // Clamp to screen bounds
             let clampedRect = convertedRect.intersection(bounds)
             
-            // Skip if box is completely off-screen or too small
             guard !clampedRect.isNull, clampedRect.width > 10, clampedRect.height > 10 else {
                 continue
             }
             
-            // Draw bounding box
-            ctx.setStrokeColor(UIColor.yellow.cgColor)
+            // Calculate alpha based on age (fade out effect)
+            let age = Date().timeIntervalSince(tracked.lastSeen)
+            let fadeStartTime: TimeInterval = 0.3
+            let alpha: CGFloat = age > fadeStartTime ? max(0, 1 - CGFloat((age - fadeStartTime) / (maxDetectionAge - fadeStartTime))) : 1.0
+            
+            // Draw bounding box with fade
+            ctx.setStrokeColor(UIColor.yellow.withAlphaComponent(alpha).cgColor)
             ctx.setLineWidth(4)
             ctx.stroke(clampedRect)
-
-            // Draw label with smart positioning
-            let text = "\(box.label) \(Int(box.confidence * 100))%"
+            
+            // Draw label
+            let text = "\(tracked.label) \(Int(tracked.confidence * 100))%"
             let attrs: [NSAttributedString.Key: Any] = [
                 .font: UIFont.boldSystemFont(ofSize: 16),
-                .foregroundColor: UIColor.yellow
+                .foregroundColor: UIColor.yellow.withAlphaComponent(alpha)
             ]
             
             let textSize = text.size(withAttributes: attrs)
             
-            // CRITICAL FIX: Smart label positioning
-            // Try above box first, if not enough space, put inside box at top
+            // Smart label positioning
             var labelOrigin: CGPoint
-            
             if clampedRect.minY > textSize.height + 8 {
-                // Enough space above box
                 labelOrigin = CGPoint(x: clampedRect.minX, y: clampedRect.minY - textSize.height - 4)
             } else {
-                // Not enough space above, put inside box at top
                 labelOrigin = CGPoint(x: clampedRect.minX + 4, y: clampedRect.minY + 4)
             }
             
-            // Ensure label doesn't go off right edge
+            // Keep label on screen
             if labelOrigin.x + textSize.width + 8 > bounds.width {
                 labelOrigin.x = bounds.width - textSize.width - 12
             }
-            
-            // Ensure label doesn't go off left edge
             labelOrigin.x = max(4, labelOrigin.x)
             
-            // Draw semi-transparent background for text
+            // Draw text background
             let backgroundRect = CGRect(
                 x: labelOrigin.x,
                 y: labelOrigin.y,
                 width: textSize.width + 8,
                 height: textSize.height + 4
             )
-            ctx.setFillColor(UIColor.black.withAlphaComponent(0.7).cgColor)
+            ctx.setFillColor(UIColor.black.withAlphaComponent(0.7 * alpha).cgColor)
             ctx.fill(backgroundRect)
             
             // Draw text
@@ -145,8 +173,25 @@ class CameraPreviewView: UIView {
     }
     
     func updateDetections(_ detections: [DetectedObject]) {
-        self.detections = detections
-        // Force immediate redraw
+        // Match new detections with existing tracked detections
+        var matchedIndices = Set<Int>()
+        
+        // Update existing tracked detections
+        for tracked in trackedDetections {
+            if let index = detections.firstIndex(where: { tracked.matches($0) }) {
+                tracked.update(with: detections[index])
+                matchedIndices.insert(index)
+            }
+        }
+        
+        // Add new detections that weren't matched
+        for (index, detection) in detections.enumerated() {
+            if !matchedIndices.contains(index) {
+                trackedDetections.append(TrackedDetection(detection: detection))
+            }
+        }
+        
+        // Trigger redraw
         setNeedsDisplay()
     }
 }

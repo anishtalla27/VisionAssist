@@ -98,8 +98,8 @@ class CameraPreviewView: UIView {
     weak var previewLayer: AVCaptureVideoPreviewLayer?
     
     // Stabilization parameters
-    private let minConfirmationFrames = 2      // Must be detected in N frames to show
-    private let maxDetectionAge: TimeInterval = 0.5  // Keep for 0.5s after last seen
+    private let minConfirmationFrames = 3      // Require 3 frames instead of 2
+    private let maxDetectionAge: TimeInterval = 0.3  // Reduce from 0.5s to 0.3s
     
     override func draw(_ rect: CGRect) {
         super.draw(rect)
@@ -112,8 +112,8 @@ class CameraPreviewView: UIView {
         // Remove stale detections
         trackedDetections.removeAll { $0.isStale(maxAge: maxDetectionAge) }
         
-        // Draw only confirmed detections
-        for tracked in trackedDetections where tracked.isConfirmed(minFrames: minConfirmationFrames) {
+        // Only show confirmed detections with reasonable confidence
+        for tracked in trackedDetections where tracked.isConfirmed(minFrames: minConfirmationFrames) && tracked.confidence > 0.50 {
             // Use smoothed rect for stable display
             let convertedRect = previewLayer.layerRectConverted(fromMetadataOutputRect: tracked.smoothedRect)
             
@@ -182,6 +182,15 @@ class CameraPreviewView: UIView {
                 tracked.update(with: detections[index])
                 matchedIndices.insert(index)
             }
+        }
+        
+        // CRITICAL: Remove stale detections immediately after matching
+        trackedDetections.removeAll { $0.isStale(maxAge: maxDetectionAge) }
+        
+        // Remove low-confidence detections that haven't been re-detected
+        trackedDetections.removeAll { detection in
+            let timeSinceLastSeen = Date().timeIntervalSince(detection.lastSeen)
+            return timeSinceLastSeen > 0.15 && detection.confidence < 0.55
         }
         
         // Add new detections that weren't matched

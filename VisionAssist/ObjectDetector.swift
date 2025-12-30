@@ -204,7 +204,7 @@ class ObjectDetector {
         let coordsCount = 4
         let numClasses = channels - coordsCount
 
-        let confThreshold: Float = 0.45  // Higher threshold = fewer false positives
+        let confThreshold: Float = 0.55  // Higher threshold = fewer false positives
 
         for det in 0..<numDetections {
             // Read bbox center x, center y, width, height from channel 0..3

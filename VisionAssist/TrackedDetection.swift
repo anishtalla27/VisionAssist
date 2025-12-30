@@ -34,7 +34,10 @@ class TrackedDetection {
     
     func update(with detection: DetectedObject) {
         self.label = detection.label
-        self.confidence = detection.confidence
+        
+        // Smooth confidence updates (prevents jumpy confidence values)
+        self.confidence = self.confidence * 0.7 + detection.confidence * 0.3
+        
         self.lastSeen = Date()
         self.consecutiveFrames += 1
         
@@ -58,7 +61,7 @@ class TrackedDetection {
         return consecutiveFrames >= minFrames
     }
     
-    func matches(_ detection: DetectedObject, iouThreshold: Float = 0.4) -> Bool {
+    func matches(_ detection: DetectedObject, iouThreshold: Float = 0.3) -> Bool {
         // Same label and overlapping boxes
         guard detection.label == label else { return false }
         

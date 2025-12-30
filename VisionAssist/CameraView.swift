@@ -31,6 +31,7 @@ struct CameraView: UIViewRepresentable {
         view.overlay.backgroundColor = .clear
         view.overlay.isUserInteractionEnabled = false
         view.overlay.frame = view.bounds
+        view.overlay.previewLayer = cameraManager.previewLayer  // Pass preview layer for coordinate conversion
         view.addSubview(view.overlay)
 
         // Set up detection callback
@@ -71,34 +72,29 @@ class CameraContainerView: UIView {
 // UIView subclass for overlay drawing
 class CameraPreviewView: UIView {
     private var detections: [DetectedObject] = []
+    weak var previewLayer: AVCaptureVideoPreviewLayer?  // Reference for coordinate conversion
     
     override func draw(_ rect: CGRect) {
         super.draw(rect)
         
-        guard let ctx = UIGraphicsGetCurrentContext() else { return }
+        guard let ctx = UIGraphicsGetCurrentContext(),
+              let previewLayer = previewLayer else { return }
         
         // Clear any previous drawings
         ctx.clear(rect)
 
         for box in detections {
-            let r = box.rect
-            
-            // CRITICAL FIX: Proper coordinate conversion
-            // Vision framework uses bottom-left origin, UIKit uses top-left
-            // Normalized coordinates: (0,0) = bottom-left, (1,1) = top-right
-            let viewRect = CGRect(
-                x: r.minX * bounds.width,
-                y: (1 - r.maxY) * bounds.height,  // Flip Y-axis
-                width: r.width * bounds.width,
-                height: r.height * bounds.height
-            )
+            // Use AVCaptureVideoPreviewLayer to convert Vision coordinates to layer coordinates
+            // This properly handles the aspect ratio difference between model input (640x640)
+            // and the camera preview which uses resizeAspectFill
+            let convertedRect = previewLayer.layerRectConverted(fromMetadataOutputRect: box.rect)
             
             // Draw bounding box with thick yellow line
             ctx.setStrokeColor(UIColor.yellow.cgColor)
-            ctx.setLineWidth(4)  // Increased thickness for visibility
-            ctx.stroke(viewRect)
+            ctx.setLineWidth(4)
+            ctx.stroke(convertedRect)
 
-            // Draw label background
+            // Draw label
             let text = "\(box.label) \(Int(box.confidence * 100))%"
             let attrs: [NSAttributedString.Key: Any] = [
                 .font: UIFont.boldSystemFont(ofSize: 16),
@@ -106,7 +102,7 @@ class CameraPreviewView: UIView {
             ]
             
             let textSize = text.size(withAttributes: attrs)
-            let labelOrigin = CGPoint(x: viewRect.minX, y: max(0, viewRect.minY - textSize.height - 4))
+            let labelOrigin = CGPoint(x: convertedRect.minX, y: max(0, convertedRect.minY - textSize.height - 4))
             
             // Draw semi-transparent background for text
             let backgroundRect = CGRect(

@@ -17,7 +17,7 @@ struct DetectedObject {
 }
 
 class ObjectDetector {
-    private var request: VNCoreMLRequest?
+    private var visionModel: VNCoreMLModel?
     
     init() {
         loadModel()
@@ -32,21 +32,14 @@ class ObjectDetector {
         do {
             let modelConfiguration = MLModelConfiguration()
             let model = try MLModel(contentsOf: modelURL, configuration: modelConfiguration)
-            let visionModel = try VNCoreMLModel(for: model)
-            
-            request = VNCoreMLRequest(model: visionModel) { request, error in
-                if let error = error {
-                    print("Error processing request: \(error)")
-                }
-            }
-            request?.imageCropAndScaleOption = .scaleFill
+            visionModel = try VNCoreMLModel(for: model)
         } catch {
             print("Error loading model: \(error)")
         }
     }
     
     func detect(pixelBuffer: CVPixelBuffer) -> [DetectedObject] {
-        guard let request = request else {
+        guard let visionModel = visionModel else {
             return []
         }
         
@@ -55,7 +48,7 @@ class ObjectDetector {
         
         let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, options: [:])
         
-        request.completionHandler = { [weak self] request, error in
+        let request = VNCoreMLRequest(model: visionModel) { [weak self] request, error in
             if let error = error {
                 print("Error in detection: \(error)")
                 semaphore.signal()
@@ -97,6 +90,8 @@ class ObjectDetector {
             
             semaphore.signal()
         }
+        
+        request.imageCropAndScaleOption = .scaleFill
         
         do {
             try handler.perform([request])

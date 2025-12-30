@@ -9,6 +9,7 @@ class CameraManager: NSObject, ObservableObject, AVCaptureVideoDataOutputSampleB
     let session = AVCaptureSession()
     private let detector = ObjectDetector()
     let previewLayer = AVCaptureVideoPreviewLayer()
+    let voiceManager = VoiceManager()
 
     // Callback that sends detections back to UI
     var onDetections: (([DetectedObject]) -> Void)?
@@ -51,8 +52,11 @@ class CameraManager: NSObject, ObservableObject, AVCaptureVideoDataOutputSampleB
         let detections = detector.detect(pixelBuffer: pixelBuffer)
 
         // Send results to UI
-        DispatchQueue.main.async {
-            self.onDetections?(detections)
+        DispatchQueue.main.async { [weak self] in
+            self?.onDetections?(detections)
+            
+            // Announce detections via voice
+            self?.voiceManager.announceDetections(detections)
         }
     }
 }

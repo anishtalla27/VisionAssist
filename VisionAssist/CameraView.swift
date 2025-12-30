@@ -9,7 +9,7 @@ import SwiftUI
 import AVFoundation
 
 struct CameraView: UIViewRepresentable {
-    @ObservedObject var cameraManager = CameraManager()
+    @ObservedObject var cameraManager: CameraManager
     
     func makeCoordinator() -> Coordinator {
         Coordinator()

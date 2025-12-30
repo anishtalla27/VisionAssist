@@ -117,6 +117,7 @@ class ObjectDetector {
             return []
         }
         
+        print("Final detections this frame:", detectedObjects.count)
         return detectedObjects
     }
     

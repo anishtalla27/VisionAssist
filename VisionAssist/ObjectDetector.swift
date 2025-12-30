@@ -122,7 +122,7 @@ class ObjectDetector {
     
     private func parseYOLOOutputs(observations: [VNObservation], pixelBuffer: CVPixelBuffer) -> [DetectedObject] {
         var detectedObjects: [DetectedObject] = []
-        
+
         // COCO class names for YOLO11n
         let classNames = [
             "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat",
@@ -136,71 +136,78 @@ class ObjectDetector {
             "keyboard", "cell phone", "microwave", "oven", "toaster", "sink", "refrigerator", "book",
             "clock", "vase", "scissors", "teddy bear", "hair drier", "toothbrush"
         ]
-        
+
         let width = CGFloat(CVPixelBufferGetWidth(pixelBuffer))
         let height = CGFloat(CVPixelBufferGetHeight(pixelBuffer))
-        
-        for observation in observations {
-            if let coreMLObservation = observation as? VNCoreMLFeatureValueObservation,
-               let multiArray = coreMLObservation.featureValue.multiArrayValue {
-                
-                // YOLO output format is typically [1, num_detections, 84] where 84 = 4 (bbox) + 80 (classes)
-                // Or it could be flattened: [num_detections * 84]
-                let shape = multiArray.shape
-                
-                if shape.count >= 2 {
-                    let numDetections = shape[1].intValue
-                    let featuresPerDetection = shape.count > 2 ? shape[2].intValue : (multiArray.count / numDetections)
-                    
-                    for i in 0..<numDetections {
-                        let baseIndex = i * featuresPerDetection
-                        
-                        guard baseIndex + 4 < multiArray.count else { continue }
-                        
-                        // Get bounding box coordinates (normalized)
-                        let xCenter = multiArray[baseIndex].doubleValue
-                        let yCenter = multiArray[baseIndex + 1].doubleValue
-                        let boxWidth = multiArray[baseIndex + 2].doubleValue
-                        let boxHeight = multiArray[baseIndex + 3].doubleValue
-                        
-                        // Find class with highest confidence
-                        var maxClassScore: Float = 0
-                        var maxClassIndex = 0
-                        
-                        for j in 4..<min(featuresPerDetection, 84) {
-                            let classIndex = baseIndex + j
-                            guard classIndex < multiArray.count else { break }
-                            let score = multiArray[classIndex].floatValue
-                            if score > maxClassScore {
-                                maxClassScore = score
-                                maxClassIndex = j - 4
-                            }
-                        }
-                        
-                        // Confidence threshold
-                        guard maxClassScore > 0.25 else { continue }
-                        
-                        // Convert normalized coordinates to pixel coordinates
-                        // YOLO uses center format, convert to origin + size
-                        let rect = CGRect(
-                            x: CGFloat(xCenter - boxWidth / 2) * width,
-                            y: CGFloat(1 - yCenter - boxHeight / 2) * height,
-                            width: CGFloat(boxWidth) * width,
-                            height: CGFloat(boxHeight) * height
-                        )
-                        
-                        let label = maxClassIndex < classNames.count ? classNames[maxClassIndex] : "class_\(maxClassIndex)"
-                        
-                        detectedObjects.append(DetectedObject(
-                            label: label,
-                            confidence: maxClassScore,
-                            rect: rect
-                        ))
-                    }
+
+        guard let featureObs = observations.first as? VNCoreMLFeatureValueObservation,
+              let multiArray = featureObs.featureValue.multiArrayValue else {
+            print("No VNCoreMLFeatureValueObservation in results")
+            return []
+        }
+
+        let shape = multiArray.shape
+        print("YOLO output shape:", shape)
+
+        // Expect [1, 84, 8400]
+        guard shape.count == 3,
+              shape[0].intValue == 1,
+              shape[1].intValue == 84 else {
+            print("Unexpected YOLO output shape")
+            return []
+        }
+
+        let channels = shape[1].intValue      // 84
+        let numDetections = shape[2].intValue // 8400
+
+        let coordsCount = 4
+        let numClasses = channels - coordsCount
+
+        let confThreshold: Float = 0.25
+
+        for det in 0..<numDetections {
+            // Read bbox center x, center y, width, height from channel 0..3
+            let xCenter = multiArray[[0, 0, NSNumber(value: det)]].doubleValue
+            let yCenter = multiArray[[0, 1, NSNumber(value: det)]].doubleValue
+            let boxWidth = multiArray[[0, 2, NSNumber(value: det)]].doubleValue
+            let boxHeight = multiArray[[0, 3, NSNumber(value: det)]].doubleValue
+
+            var bestScore: Float = 0
+            var bestClassIndex = 0
+
+            // Class scores start at channel index 4
+            for c in 0..<numClasses {
+                let score = multiArray[[0, NSNumber(value: 4 + c), NSNumber(value: det)]].floatValue
+                if score > bestScore {
+                    bestScore = score
+                    bestClassIndex = c
                 }
             }
+
+            if bestScore < confThreshold {
+                continue
+            }
+
+            // Convert normalized center format to pixel CGRect
+            let rect = CGRect(
+                x: CGFloat(xCenter - boxWidth / 2) * width,
+                y: CGFloat(1 - yCenter - boxHeight / 2) * height,
+                width: CGFloat(boxWidth) * width,
+                height: CGFloat(boxHeight) * height
+            )
+
+            let label = bestClassIndex < classNames.count ? classNames[bestClassIndex] : "class_\(bestClassIndex)"
+
+            detectedObjects.append(
+                DetectedObject(
+                    label: label,
+                    confidence: bestScore,
+                    rect: rect
+                )
+            )
         }
-        
+
+        print("Parsed detections count:", detectedObjects.count)
         return detectedObjects
     }
 }

@@ -67,30 +67,27 @@ class CameraPreviewView: UIView {
 
     // Draw detection rectangles
     func updateDetections(_ detections: [DetectedObject]) {
-        // Remove old boxes
         boxLayers.forEach { $0.removeFromSuperlayer() }
         boxLayers.removeAll()
 
         guard !detections.isEmpty else { return }
 
-        for detection in detections {
-            let n = detection.rect  // normalized rect [0,1]
+        for det in detections {
+            let n = det.rect  // normalized YOLO rect (0-1)
 
-            // Convert to view coordinates
+            // convert normalized -> screen coords
             let viewRect = CGRect(
-                x: n.origin.x * bounds.width,
-                // flip vertically because normalized y is from top in model space
-                y: (1 - n.origin.y - n.height) * bounds.height,
+                x: n.minX * bounds.width,
+                y: (1 - n.maxY) * bounds.height,
                 width: n.width * bounds.width,
                 height: n.height * bounds.height
             )
 
             let shape = CAShapeLayer()
-            shape.frame = viewRect
-            shape.borderColor = UIColor.systemYellow.cgColor
-            shape.borderWidth = 2
-            shape.cornerRadius = 4
-            shape.masksToBounds = true
+            shape.path = UIBezierPath(rect: viewRect).cgPath
+            shape.strokeColor = UIColor.systemYellow.cgColor
+            shape.lineWidth = 2
+            shape.fillColor = UIColor.clear.cgColor
 
             layer.addSublayer(shape)
             boxLayers.append(shape)

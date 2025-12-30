@@ -116,7 +116,8 @@ class CameraPreviewView: UIView {
             textLayer.foregroundColor = UIColor.yellow.cgColor
             textLayer.fontSize = 14
             textLayer.frame = CGRect(x: viewRect.minX, y: viewRect.minY - 18, width: 120, height: 18)
-            textLayer.contentsScale = UIScreen.main.scale  // sharp text
+            let screenScale = window?.windowScene?.screen.scale ?? UIScreen.main.scale
+            textLayer.contentsScale = screenScale  // sharp text
 
             layer.addSublayer(textLayer)
             boxLayers.append(textLayer)

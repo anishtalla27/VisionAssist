@@ -30,20 +30,6 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		8D417E852F03A17E0054D88A /* Exceptions for "VisionAssist" folder in "VisionAssistTests" target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				yolo11n.mlpackage,
-			);
-			target = 8D417E5B2F0341C80054D88A /* VisionAssistTests */;
-		};
-		8D417E862F03A17E0054D88A /* Exceptions for "VisionAssist" folder in "VisionAssistUITests" target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				yolo11n.mlpackage,
-			);
-			target = 8D417E652F0341C80054D88A /* VisionAssistUITests */;
-		};
 		8D417E892F03AD4B0054D88A /* Exceptions for "VisionAssist" folder in "VisionAssist" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
@@ -69,8 +55,6 @@
 			exceptions = (
 				8D417E892F03AD4B0054D88A /* Exceptions for "VisionAssist" folder in "VisionAssist" target */,
 				8D417E882F03ABDA0054D88A /* Exceptions for "VisionAssist" folder in "Copy Bundle Resources" phase from "VisionAssist" target */,
-				8D417E852F03A17E0054D88A /* Exceptions for "VisionAssist" folder in "VisionAssistTests" target */,
-				8D417E862F03A17E0054D88A /* Exceptions for "VisionAssist" folder in "VisionAssistUITests" target */,
 			);
 			path = VisionAssist;
 			sourceTree = "<group>";

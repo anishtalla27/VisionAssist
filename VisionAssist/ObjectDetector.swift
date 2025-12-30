@@ -19,17 +19,19 @@ struct DetectedObject {
 class ObjectDetector {
     // Load YOLO .mlpackage model from bundle
     private func loadModel() -> VNCoreMLModel? {
-        guard let url = Bundle.main.url(forResource: "yolo11n", withExtension: "mlpackage") else {
-            print("Error: yolo11n.mlpackage not found in bundle")
-            return nil
-        }
-
-        do {
-            let compiled = try MLModel.compileModel(at: url)
-            let model = try MLModel(contentsOf: compiled)
-            return try VNCoreMLModel(for: model)
-        } catch {
-            print("Model load failed:", error.localizedDescription)
+        if let url = Bundle.main.url(forResource: "yolo11n", withExtension: "mlpackage") {
+            print("✅ Model found at:", url)
+            
+            do {
+                let compiled = try MLModel.compileModel(at: url)
+                let model = try MLModel(contentsOf: compiled)
+                return try VNCoreMLModel(for: model)
+            } catch {
+                print("Model load failed:", error.localizedDescription)
+                return nil
+            }
+        } else {
+            print("❌ Model not found in bundle")
             return nil
         }
     }

@@ -153,7 +153,7 @@ class ObjectDetector {
         let coordsCount = 4
         let numClasses = channels - coordsCount
 
-        let confThreshold: Float = 0.5
+        let confThreshold: Float = 0.25
 
         for det in 0..<numDetections {
             // Read bbox center x, center y, width, height from channel 0..3

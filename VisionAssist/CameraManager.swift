@@ -7,7 +7,6 @@ class CameraManager: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
 
     let session = AVCaptureSession()
     private let detector = ObjectDetector()
-    private var frameCount = 0
 
     // Callback that sends detections back to UI
     var onDetections: (([DetectedObject]) -> Void)?
@@ -45,17 +44,12 @@ class CameraManager: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
 
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
 
-        // Detect every 3rd frame for smooth preview
-        frameCount += 1
-        if frameCount % 3 != 0 { return }
+        // Run detection
+        let detections = detector.detect(pixelBuffer: pixelBuffer)
 
-        DispatchQueue.global(qos: .userInitiated).async {
-            let detections = self.detector.detect(pixelBuffer: pixelBuffer)
-
-            DispatchQueue.main.async {
-                self.onDetections?(detections)
-                NotificationCenter.default.post(name: .updateDetections, object: detections)
-            }
+        // Send results to UI
+        DispatchQueue.main.async {
+            self.onDetections?(detections)
         }
     }
 }

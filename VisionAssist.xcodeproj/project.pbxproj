@@ -6,12 +6,6 @@
 	objectVersion = 77;
 	objects = {
 
-/* Begin PBXBuildFile section */
-		8D417E802F038EB40054D88A /* yolo11n.mlpackage in Sources */ = {isa = PBXBuildFile; fileRef = 8D417E7F2F038EB40054D88A /* yolo11n.mlpackage */; };
-		8D417E812F038EB40054D88A /* yolo11n.mlpackage in Sources */ = {isa = PBXBuildFile; fileRef = 8D417E7F2F038EB40054D88A /* yolo11n.mlpackage */; };
-		8D417E822F038EB40054D88A /* yolo11n.mlpackage in Sources */ = {isa = PBXBuildFile; fileRef = 8D417E7F2F038EB40054D88A /* yolo11n.mlpackage */; };
-/* End PBXBuildFile section */
-
 /* Begin PBXContainerItemProxy section */
 		8D417E5D2F0341C80054D88A /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -33,12 +27,32 @@
 		8D417E4D2F0341C70054D88A /* VisionAssist.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = VisionAssist.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		8D417E5C2F0341C80054D88A /* VisionAssistTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = VisionAssistTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		8D417E662F0341C80054D88A /* VisionAssistUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = VisionAssistUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		8D417E7F2F038EB40054D88A /* yolo11n.mlpackage */ = {isa = PBXFileReference; lastKnownFileType = folder.mlpackage; path = yolo11n.mlpackage; sourceTree = "<group>"; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		8D417E852F03A17E0054D88A /* Exceptions for "VisionAssist" folder in "VisionAssistTests" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				yolo11n.mlpackage,
+			);
+			target = 8D417E5B2F0341C80054D88A /* VisionAssistTests */;
+		};
+		8D417E862F03A17E0054D88A /* Exceptions for "VisionAssist" folder in "VisionAssistUITests" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				yolo11n.mlpackage,
+			);
+			target = 8D417E652F0341C80054D88A /* VisionAssistUITests */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		8D417E4F2F0341C70054D88A /* VisionAssist */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				8D417E852F03A17E0054D88A /* Exceptions for "VisionAssist" folder in "VisionAssistTests" target */,
+				8D417E862F03A17E0054D88A /* Exceptions for "VisionAssist" folder in "VisionAssistUITests" target */,
+			);
 			path = VisionAssist;
 			sourceTree = "<group>";
 		};
@@ -82,7 +96,6 @@
 		8D417E442F0341C70054D88A = {
 			isa = PBXGroup;
 			children = (
-				8D417E7F2F038EB40054D88A /* yolo11n.mlpackage */,
 				8D417E4F2F0341C70054D88A /* VisionAssist */,
 				8D417E5F2F0341C80054D88A /* VisionAssistTests */,
 				8D417E692F0341C80054D88A /* VisionAssistUITests */,
@@ -244,7 +257,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				8D417E812F038EB40054D88A /* yolo11n.mlpackage in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -252,7 +264,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				8D417E802F038EB40054D88A /* yolo11n.mlpackage in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -260,7 +271,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				8D417E822F038EB40054D88A /* yolo11n.mlpackage in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

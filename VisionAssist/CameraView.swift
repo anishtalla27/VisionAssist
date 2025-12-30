@@ -47,10 +47,10 @@ struct CameraView: UIViewRepresentable {
 // UIView subclass to show preview + overlays
 class CameraPreviewView: UIView {
     private var previewLayer: AVCaptureVideoPreviewLayer
-    private var boxLayers: [CALayer] = []
+    private var boxLayers: [CAShapeLayer] = []
+    private var textLayers: [CATextLayer] = []
     private var lastDetections: [DetectedObject] = []
-    private let persistenceFrames = 6 // show boxes for ~6 cycles if object disappears
-    private var persistenceCounter = 0
+    private var persistence = 0
 
     override class var layerClass: AnyClass { AVCaptureVideoPreviewLayer.self }
 
@@ -69,57 +69,61 @@ class CameraPreviewView: UIView {
     required init?(coder: NSCoder) { fatalError() }
 
     func updateDetections(_ detections: [DetectedObject]) {
-        if detections.isEmpty {
-            if persistenceCounter > 0 {
-                persistenceCounter -= 1
-                drawBoxes(lastDetections)
-            } else {
-                clearBoxes()
+        DispatchQueue.main.async {
+            if detections.isEmpty {
+                if self.persistence > 0 {
+                    self.persistence -= 1
+                    self.drawBoxes(self.lastDetections)
+                } else {
+                    self.clearBoxes()
+                }
+                return
             }
-            return
-        }
 
-        lastDetections = detections
-        persistenceCounter = persistenceFrames
-        drawBoxes(detections)
+            self.lastDetections = detections
+            self.persistence = 6
+            self.drawBoxes(detections)
+        }
     }
-    
+
     private func clearBoxes() {
         boxLayers.forEach { $0.removeFromSuperlayer() }
+        textLayers.forEach { $0.removeFromSuperlayer() }
         boxLayers.removeAll()
+        textLayers.removeAll()
     }
-    
+
     private func drawBoxes(_ detections: [DetectedObject]) {
         clearBoxes()
+        let W = bounds.width
+        let H = bounds.height
 
         for det in detections {
-            let n = det.rect
-
-            let viewRect = CGRect(
-                x: n.minX * bounds.width,
-                y: (1 - n.maxY) * bounds.height,
-                width: n.width * bounds.width,
-                height: n.height * bounds.height
+            let r = det.rect
+            let rect = CGRect(
+                x: r.minX * W,
+                y: (1 - r.maxY) * H,
+                width: r.width * W,
+                height: r.height * H
             )
 
             let box = CAShapeLayer()
-            box.path = UIBezierPath(rect: viewRect).cgPath
+            box.path = UIBezierPath(rect: rect).cgPath
             box.strokeColor = UIColor.yellow.cgColor
             box.lineWidth = 2
             box.fillColor = UIColor.clear.cgColor
             layer.addSublayer(box)
             boxLayers.append(box)
 
-            // label text
-            let textLayer = CATextLayer()
-            textLayer.string = det.label + " " + String(format: "%.2f", det.confidence)
-            textLayer.foregroundColor = UIColor.yellow.cgColor
-            textLayer.fontSize = 14
-            textLayer.frame = CGRect(x: viewRect.minX, y: viewRect.minY - 18, width: 120, height: 18)
-            textLayer.contentsScale = UIScreen.main.scale  // sharp text
-
-            layer.addSublayer(textLayer)
-            boxLayers.append(textLayer)
+            let label = CATextLayer()
+            label.string = "\(det.label) \(String(format: "%.2f", det.confidence))"
+            label.fontSize = 13
+            label.foregroundColor = UIColor.yellow.cgColor
+            label.backgroundColor = UIColor.black.withAlphaComponent(0.5).cgColor
+            label.frame = CGRect(x: rect.minX, y: rect.minY - 18, width: 140, height: 18)
+            label.contentsScale = UIScreen.main.scale
+            layer.addSublayer(label)
+            textLayers.append(label)
         }
     }
     

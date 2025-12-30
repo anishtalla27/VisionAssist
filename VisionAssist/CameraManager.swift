@@ -3,16 +3,18 @@ import AVFoundation
 import Vision
 import UIKit
 
-class CameraManager: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
+class CameraManager: NSObject, ObservableObject, AVCaptureVideoDataOutputSampleBufferDelegate {
 
     let session = AVCaptureSession()
     private let detector = ObjectDetector()
+    let previewLayer = AVCaptureVideoPreviewLayer()
 
     // Callback that sends detections back to UI
     var onDetections: (([DetectedObject]) -> Void)?
 
     override init() {
         super.init()
+        previewLayer.session = session
         configureSession()
     }
 

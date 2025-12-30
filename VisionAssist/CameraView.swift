@@ -9,132 +9,68 @@ import SwiftUI
 import AVFoundation
 
 struct CameraView: UIViewRepresentable {
-
-    private let manager = CameraManager()
-    @State private var detections: [DetectedObject] = []
-
+    @ObservedObject var cameraManager = CameraManager()
+    
     func makeUIView(context: Context) -> UIView {
-        let view = CameraPreviewView(session: manager.session)
+        let view = UIView(frame: UIScreen.main.bounds)
 
-        // Handle detection results
-        manager.onDetections = { objects in
-            context.coordinator.updateDetections(objects)
+        cameraManager.previewLayer.frame = view.bounds
+        cameraManager.previewLayer.videoGravity = .resizeAspectFill
+        view.layer.addSublayer(cameraManager.previewLayer)
+
+        let overlay = CameraPreviewView()
+        overlay.frame = view.bounds
+        overlay.isUserInteractionEnabled = false
+        overlay.backgroundColor = .clear
+        view.addSubview(overlay)
+
+        cameraManager.onDetections = { detections in
+            DispatchQueue.main.async {
+                overlay.updateDetections(detections)
+            }
         }
-
         return view
     }
 
-    func updateUIView(_ uiView: UIView, context: Context) {}
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(self)
-    }
-
-    // Coordinator to update bounding boxes
-    class Coordinator {
-        var parent: CameraView
-
-        init(_ parent: CameraView) {
-            self.parent = parent
-        }
-
-        func updateDetections(_ objects: [DetectedObject]) {
-            NotificationCenter.default.post(name: .updateDetections, object: objects)
+    func updateUIView(_ uiView: UIView, context: Context) {
+        if let previewLayer = cameraManager.previewLayer.superlayer {
+            cameraManager.previewLayer.frame = uiView.bounds
         }
     }
 }
 
-// UIView subclass to show preview + overlays
+// UIView subclass for overlay drawing
 class CameraPreviewView: UIView {
-    private var previewLayer: AVCaptureVideoPreviewLayer
-    private var boxLayers: [CAShapeLayer] = []
-    private var textLayers: [CATextLayer] = []
-    private var lastDetections: [DetectedObject] = []
-    private var persistence = 0
+    private var detections: [DetectedObject] = []
+    
+    override func draw(_ rect: CGRect) {
+        guard let ctx = UIGraphicsGetCurrentContext() else { return }
 
-    override class var layerClass: AnyClass { AVCaptureVideoPreviewLayer.self }
-
-    init(session: AVCaptureSession) {
-        self.previewLayer = AVCaptureVideoPreviewLayer(session: session)
-        super.init(frame: .zero)
-        previewLayer.videoGravity = .resizeAspectFill
-        (self.layer as! AVCaptureVideoPreviewLayer).session = session
-
-        NotificationCenter.default.addObserver(self,
-            selector: #selector(updateBoxes(_:)),
-            name: .updateDetections, object: nil
-        )
-    }
-
-    required init?(coder: NSCoder) { fatalError() }
-
-    func updateDetections(_ detections: [DetectedObject]) {
-        DispatchQueue.main.async {
-            if detections.isEmpty {
-                if self.persistence > 0 {
-                    self.persistence -= 1
-                    self.drawBoxes(self.lastDetections)
-                } else {
-                    self.clearBoxes()
-                }
-                return
-            }
-
-            self.lastDetections = detections
-            self.persistence = 6
-            self.drawBoxes(detections)
-        }
-    }
-
-    private func clearBoxes() {
-        boxLayers.forEach { $0.removeFromSuperlayer() }
-        textLayers.forEach { $0.removeFromSuperlayer() }
-        boxLayers.removeAll()
-        textLayers.removeAll()
-    }
-
-    private func drawBoxes(_ detections: [DetectedObject]) {
-        clearBoxes()
-        let W = bounds.width
-        let H = bounds.height
-
-        for det in detections {
-            let r = det.rect
-            let rect = CGRect(
-                x: r.minX * W,
-                y: (1 - r.maxY) * H,
-                width: r.width * W,
-                height: r.height * H
+        for box in detections {
+            let r = box.rect
+            let viewRect = CGRect(
+                x: r.minX * bounds.width,
+                y: (1 - r.maxY) * bounds.height,
+                width: r.width * bounds.width,
+                height: r.height * bounds.height
             )
+            
+            ctx.setStrokeColor(UIColor.yellow.cgColor)
+            ctx.setLineWidth(3)
+            ctx.stroke(viewRect)
 
-            let box = CAShapeLayer()
-            box.path = UIBezierPath(rect: rect).cgPath
-            box.strokeColor = UIColor.yellow.cgColor
-            box.lineWidth = 2
-            box.fillColor = UIColor.clear.cgColor
-            layer.addSublayer(box)
-            boxLayers.append(box)
-
-            let label = CATextLayer()
-            label.string = "\(det.label) \(String(format: "%.2f", det.confidence))"
-            label.fontSize = 13
-            label.foregroundColor = UIColor.yellow.cgColor
-            label.backgroundColor = UIColor.black.withAlphaComponent(0.5).cgColor
-            label.frame = CGRect(x: rect.minX, y: rect.minY - 18, width: 140, height: 18)
-            label.contentsScale = UIScreen.main.scale
-            layer.addSublayer(label)
-            textLayers.append(label)
+            let text = "\(box.label) \(Int(box.confidence * 100))%"
+            let attrs: [NSAttributedString.Key: Any] = [
+                .font: UIFont.boldSystemFont(ofSize: 14),
+                .foregroundColor: UIColor.yellow
+            ]
+            text.draw(at: CGPoint(x: viewRect.minX, y: viewRect.minY - 18), withAttributes: attrs)
         }
     }
     
-    @objc func updateBoxes(_ note: Notification) {
-        guard let detections = note.object as? [DetectedObject] else { return }
-        print("UI received detections:", detections.count)
-        updateDetections(detections)
+    func updateDetections(_ detections: [DetectedObject]) {
+        self.detections = detections
+        setNeedsDisplay()
     }
-}
-
-extension Notification.Name {
-    static let updateDetections = Notification.Name("updateDetections")
 }
 

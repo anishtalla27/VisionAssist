@@ -60,9 +60,15 @@ class ObjectDetector {
                 return
             }
             
+            // Safely unwrap request.results
+            guard let results = request.results else {
+                semaphore.signal()
+                return
+            }
+            
             // Try to get VNRecognizedObjectObservation first (if model outputs that format)
-            if let observations = request.results as? [VNRecognizedObjectObservation] {
-                for observation in observations {
+            if let recognizedObservations = results as? [VNRecognizedObjectObservation] {
+                for observation in recognizedObservations {
                     guard let topLabelObservation = observation.labels.first else { continue }
                     
                     // Convert bounding box from normalized coordinates (0-1) to pixel coordinates
@@ -83,9 +89,9 @@ class ObjectDetector {
                     )
                     detectedObjects.append(detectedObject)
                 }
-            } else if let observations = request.results as? [VNObservation] {
+            } else {
                 // Handle raw outputs (YOLO models typically output MLMultiArray)
-                detectedObjects = self.parseYOLOOutputs(observations: observations, pixelBuffer: pixelBuffer)
+                detectedObjects = self.parseYOLOOutputs(observations: results, pixelBuffer: pixelBuffer)
             }
             
             semaphore.signal()

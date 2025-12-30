@@ -2,7 +2,7 @@
 //  ObjectDetector.swift
 //  VisionAssist
 //
-//  Created by Anish Talla on 12/29/25.
+//  Fixed: Model loads once, proper coordinate handling, optimized performance
 //
 
 import CoreML
@@ -13,10 +13,19 @@ import Foundation
 struct DetectedObject {
     let label: String
     let confidence: Float
-    let rect: CGRect
+    let rect: CGRect  // Normalized coordinates [0, 1]
 }
 
 class ObjectDetector {
+    // CRITICAL FIX: Load model ONCE and reuse it
+    private var vnModel: VNCoreMLModel?
+    private let modelInputSize: CGFloat = 640.0  // YOLO11n input size
+    
+    init() {
+        // Load model on initialization
+        self.vnModel = loadModel()
+    }
+    
     // Load YOLO .mlpackage model from bundle
     private func loadModel() -> VNCoreMLModel? {
         let bundle = Bundle.main
@@ -34,7 +43,7 @@ class ObjectDetector {
             return nil
         }
 
-        print("✅ Loading model from:", url)
+        print("✅ Loading model ONCE from:", url)
 
         do {
             let model = try MLModel(contentsOf: url)
@@ -48,7 +57,11 @@ class ObjectDetector {
 
     
     func detect(pixelBuffer: CVPixelBuffer) -> [DetectedObject] {
-        guard let vnModel = loadModel() else { return [] }
+        // Use the pre-loaded model instead of reloading
+        guard let vnModel = self.vnModel else {
+            print("❌ Model not loaded")
+            return []
+        }
         
         var detectedObjects: [DetectedObject] = []
         let semaphore = DispatchSemaphore(value: 0)
@@ -57,7 +70,7 @@ class ObjectDetector {
         
         let request = VNCoreMLRequest(model: vnModel) { [weak self] request, error in
             if let error = error {
-                print("Error in detection: \(error)")
+                print("❌ Error in detection: \(error)")
                 semaphore.signal()
                 return
             }
@@ -66,9 +79,6 @@ class ObjectDetector {
                 semaphore.signal()
                 return
             }
-            
-            print("🔎 Inference result:", type(of: request.results))
-            print("Result count:", request.results?.count ?? 0)
             
             // Safely unwrap request.results
             guard let results = request.results else {
@@ -81,7 +91,7 @@ class ObjectDetector {
                 for observation in recognizedObservations {
                     guard let topLabelObservation = observation.labels.first else { continue }
                     
-                    // Use normalized bounding box directly (VNRecognizedObjectObservation provides normalized rects)
+                    // Use normalized bounding box directly
                     let rect = observation.boundingBox
                     
                     let detectedObject = DetectedObject(
@@ -105,11 +115,13 @@ class ObjectDetector {
             try handler.perform([request])
             semaphore.wait()
         } catch {
-            print("Error performing request: \(error)")
+            print("❌ Error performing request: \(error)")
             return []
         }
         
-        print("Final detections this frame:", detectedObjects.count)
+        if !detectedObjects.isEmpty {
+            print("✅ Detections this frame: \(detectedObjects.count)")
+        }
         return detectedObjects
     }
     
@@ -132,18 +144,16 @@ class ObjectDetector {
 
         guard let featureObs = observations.first as? VNCoreMLFeatureValueObservation,
               let multiArray = featureObs.featureValue.multiArrayValue else {
-            print("No VNCoreMLFeatureValueObservation in results")
             return []
         }
 
         let shape = multiArray.shape
-        print("YOLO output shape:", shape)
 
         // Expect [1, 84, 8400]
         guard shape.count == 3,
               shape[0].intValue == 1,
               shape[1].intValue == 84 else {
-            print("Unexpected YOLO output shape")
+            print("❌ Unexpected YOLO output shape: \(shape)")
             return []
         }
 
@@ -157,6 +167,7 @@ class ObjectDetector {
 
         for det in 0..<numDetections {
             // Read bbox center x, center y, width, height from channel 0..3
+            // CRITICAL: YOLO outputs in PIXEL space [0-640], not normalized!
             let xCenter = multiArray[[0, 0, NSNumber(value: det)]].doubleValue
             let yCenter = multiArray[[0, 1, NSNumber(value: det)]].doubleValue
             let boxWidth = multiArray[[0, 2, NSNumber(value: det)]].doubleValue
@@ -178,12 +189,18 @@ class ObjectDetector {
                 continue
             }
 
-            // We keep everything in normalized [0, 1] space here
+            // CRITICAL FIX: Normalize coordinates from pixel space to [0, 1]
+            let normalizedX = (xCenter - boxWidth / 2) / Double(modelInputSize)
+            let normalizedY = (yCenter - boxHeight / 2) / Double(modelInputSize)
+            let normalizedWidth = boxWidth / Double(modelInputSize)
+            let normalizedHeight = boxHeight / Double(modelInputSize)
+            
+            // Clamp to valid range [0, 1]
             let rect = CGRect(
-                x: CGFloat(xCenter - boxWidth / 2),
-                y: CGFloat(yCenter - boxHeight / 2),
-                width: CGFloat(boxWidth),
-                height: CGFloat(boxHeight)
+                x: max(0, min(1, CGFloat(normalizedX))),
+                y: max(0, min(1, CGFloat(normalizedY))),
+                width: max(0, min(1, CGFloat(normalizedWidth))),
+                height: max(0, min(1, CGFloat(normalizedHeight)))
             )
 
             let label = bestClassIndex < classNames.count ? classNames[bestClassIndex] : "class_\(bestClassIndex)"
@@ -197,8 +214,6 @@ class ObjectDetector {
             )
         }
 
-        print("Parsed detections count:", detectedObjects.count)
         return detectedObjects
     }
 }
-

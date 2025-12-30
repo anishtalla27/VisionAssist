@@ -17,38 +17,32 @@ struct DetectedObject {
 }
 
 class ObjectDetector {
-    private var visionModel: VNCoreMLModel?
-    
-    init() {
-        loadModel()
-    }
-    
-    private func loadModel() {
-        guard let modelURL = Bundle.main.url(forResource: "yolo11n", withExtension: "mlpackage") else {
-            print("Error: Could not find yolo11n.mlpackage in bundle")
-            return
+    // Load YOLO .mlpackage model from bundle
+    private func loadModel() -> VNCoreMLModel? {
+        guard let url = Bundle.main.url(forResource: "yolo11n", withExtension: "mlpackage") else {
+            print("Error: yolo11n.mlpackage not found in bundle")
+            return nil
         }
-        
+
         do {
-            let modelConfiguration = MLModelConfiguration()
-            let model = try MLModel(contentsOf: modelURL, configuration: modelConfiguration)
-            visionModel = try VNCoreMLModel(for: model)
+            let compiled = try MLModel.compileModel(at: url)
+            let model = try MLModel(contentsOf: compiled)
+            return try VNCoreMLModel(for: model)
         } catch {
-            print("Error loading model: \(error)")
+            print("Model load failed:", error.localizedDescription)
+            return nil
         }
     }
     
     func detect(pixelBuffer: CVPixelBuffer) -> [DetectedObject] {
-        guard let visionModel = visionModel else {
-            return []
-        }
+        guard let vnModel = loadModel() else { return [] }
         
         var detectedObjects: [DetectedObject] = []
         let semaphore = DispatchSemaphore(value: 0)
         
         let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, options: [:])
         
-        let request = VNCoreMLRequest(model: visionModel) { [weak self] request, error in
+        let request = VNCoreMLRequest(model: vnModel) { [weak self] request, error in
             if let error = error {
                 print("Error in detection: \(error)")
                 semaphore.signal()
